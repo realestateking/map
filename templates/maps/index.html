@@ -1,0 +1,240 @@
+{% extends 'base.html' %}
+{% load maps_extras %}
+
+{% block title %}Property Mapper - Interactive Map{% endblock %}
+
+{% block extra_css %}
+<style>
+    #map-container {
+        position: relative;
+        height: 75vh;
+        width: 100%;
+    }
+    
+    #map {
+        height: 100%;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    #search-container {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+        z-index: 1000;
+        max-width: 350px;
+        opacity: 0.9;
+    }
+    
+    #search-container:hover {
+        opacity: 1;
+    }
+    
+    #search-results {
+        max-height: 300px;
+        overflow-y: auto;
+        margin-top: 10px;
+    }
+    
+    .info-panel {
+        padding: 10px;
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 5px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .radius-marker {
+        stroke: #3388ff;
+        stroke-width: 2;
+        stroke-opacity: 0.6;
+        fill: #3388ff;
+        fill-opacity: 0.1;
+    }
+    
+    @media (max-width: 768px) {
+        #search-container {
+            position: relative;
+            top: 0;
+            right: 0;
+            margin-bottom: 15px;
+            max-width: 100%;
+        }
+        
+        #map-container {
+            height: 60vh;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">Property Mapper</h1>
+        
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i> Welcome to the Property Mapper. Use the search panel to find properties by lot number, address, or location.
+        </div>
+        
+        <div id="map-container">
+            <div id="map"></div>
+            
+            <div id="search-container">
+                <h4>Property Search</h4>
+                <form id="search-form" action="{% url 'search_properties' %}" method="get">
+                    <div class="mb-3">
+                        <label class="form-label">Search by:</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="search_type" id="search-lot" value="lot" checked>
+                            <label class="form-check-label" for="search-lot">Lot/Matricule Number</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="search_type" id="search-address" value="address">
+                            <label class="form-check-label" for="search-address">Address</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="search_type" id="search-radius" value="radius">
+                            <label class="form-check-label" for="search-radius">Radius Search</label>
+                        </div>
+                    </div>
+                    
+                    <div id="lot-search-fields" class="search-fields mb-3">
+                        <label for="lot_number" class="form-label">Lot/Matricule Number:</label>
+                        <input type="text" id="lot_number" name="lot_number" class="form-control" placeholder="Enter lot or matricule number">
+                    </div>
+                    
+                    <div id="address-search-fields" class="search-fields mb-3" style="display: none;">
+                        <label for="address" class="form-label">Address:</label>
+                        <input type="text" id="address" name="address" class="form-control" placeholder="Enter address">
+                    </div>
+                    
+                    <div id="radius-search-fields" class="search-fields mb-3" style="display: none;">
+                        <p>Click on the map to set the center point for radius search.</p>
+                        <input type="hidden" id="latitude" name="latitude">
+                        <input type="hidden" id="longitude" name="longitude">
+                        
+                        <label for="radius" class="form-label">Radius (km):</label>
+                        <input type="number" id="radius" name="radius" class="form-control" value="1.0" min="0.1" max="10" step="0.1">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="region" class="form-label">Region:</label>
+                        <select id="region" name="region" class="form-select">
+                            <option value="">All Regions</option>
+                            {% for region in regions %}
+                            <option value="{{ region.id }}">{{ region.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search"></i> Search
+                    </button>
+                </form>
+                
+                <div id="search-results"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">Available Regions</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    {% for region in regions %}
+                    <a href="#" class="list-group-item list-group-item-action region-item" 
+                       data-region-id="{{ region.id }}"
+                       data-lat="{{ region.center_latitude }}"
+                       data-lng="{{ region.center_longitude }}"
+                       data-zoom="{{ region.default_zoom }}">
+                        <h5 class="mb-1">{{ region.name }}</h5>
+                        {% if region.description %}
+                        <p class="mb-1">{{ region.description }}</p>
+                        {% endif %}
+                    </a>
+                    {% empty %}
+                    <div class="alert alert-warning">
+                        No regions available. Please add regions from the admin dashboard.
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">How to Use</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item">
+                        <i class="fas fa-search me-2"></i> <strong>Search by Lot/Matricule:</strong> Enter a lot or matricule number to find a specific property.
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-map-marker-alt me-2"></i> <strong>Search by Address:</strong> Enter an address to find properties at that location.
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-circle me-2"></i> <strong>Radius Search:</strong> Click on the map and specify a radius to find properties in that area.
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-map me-2"></i> <strong>Region Selection:</strong> Click on a region from the list to zoom to that area on the map.
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/layer_manager.js"></script>
+<script src="/static/js/map.js"></script>
+<script src="/static/js/search.js"></script>
+
+<script>
+    // Initialize the map
+    let defaultRegion = {% if default_region %}
+    {
+        id: {{ default_region.id }},
+        name: "{{ default_region.name }}",
+        center: [{{ default_region.center_latitude }}, {{ default_region.center_longitude }}],
+        zoom: {{ default_region.default_zoom }}
+    }
+    {% else %}
+    {
+        id: 0,
+        name: "Default",
+        center: [45.0, -73.0],
+        zoom: 10
+    }
+    {% endif %};
+    
+    let regions = [
+    {% for region in regions %}
+        {
+            id: {{ region.id }},
+            name: "{{ region.name }}",
+            center: [{{ region.center_latitude }}, {{ region.center_longitude }}],
+            zoom: {{ region.default_zoom }}
+        }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+    ];
+    
+    // Initialize map with default region
+    initMap('map', defaultRegion, regions);
+    
+    // Initialize search functionality
+    initSearch();
+</script>
+{% endblock %}

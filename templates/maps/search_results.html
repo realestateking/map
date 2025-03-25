@@ -1,0 +1,496 @@
+{% extends 'base.html' %}
+{% load maps_extras %}
+
+{% block title %}Property Search Results{% endblock %}
+
+{% block extra_css %}
+<style>
+    #results-map {
+        height: 400px;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .property-item {
+        transition: background-color 0.3s;
+    }
+    
+    .property-item:hover {
+        background-color: #f8f9fa;
+        cursor: pointer;
+    }
+    
+    .search-form-container {
+        background-color: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    
+    .property-card {
+        height: 100%;
+    }
+    
+    .no-results {
+        padding: 50px 0;
+        text-align: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'index' %}">Home</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Search Results</li>
+            </ol>
+        </nav>
+        
+        <h1 class="mb-4">Property Search Results</h1>
+        
+        <div class="search-form-container">
+            <h4>Search Criteria</h4>
+            <form action="{% url 'search_properties' %}" method="get" class="row">
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">Search Type:</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="search_type" id="search-lot" value="lot" 
+                               {% if search_form.cleaned_data.search_type == 'lot' %}checked{% endif %}>
+                        <label class="form-check-label" for="search-lot">Lot/Matricule Number</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="search_type" id="search-address" value="address"
+                               {% if search_form.cleaned_data.search_type == 'address' %}checked{% endif %}>
+                        <label class="form-check-label" for="search-address">Address</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="search_type" id="search-radius" value="radius"
+                               {% if search_form.cleaned_data.search_type == 'radius' %}checked{% endif %}>
+                        <label class="form-check-label" for="search-radius">Radius Search</label>
+                    </div>
+                </div>
+                
+                <div class="col-md-3 mb-3">
+                    <div id="lot-search-fields" {% if search_form.cleaned_data.search_type != 'lot' %}style="display: none;"{% endif %}>
+                        <label for="lot_number" class="form-label">Lot/Matricule Number:</label>
+                        <input type="text" id="lot_number" name="lot_number" class="form-control" 
+                               value="{{ search_form.cleaned_data.lot_number|default:'' }}">
+                    </div>
+                    
+                    <div id="address-search-fields" {% if search_form.cleaned_data.search_type != 'address' %}style="display: none;"{% endif %}>
+                        <label for="address" class="form-label">Address:</label>
+                        <input type="text" id="address" name="address" class="form-control" 
+                               value="{{ search_form.cleaned_data.address|default:'' }}">
+                    </div>
+                    
+                    <div id="radius-search-fields" {% if search_form.cleaned_data.search_type != 'radius' %}style="display: none;"{% endif %}>
+                        <label for="radius" class="form-label">Radius (km):</label>
+                        <input type="number" id="radius" name="radius" class="form-control" 
+                               value="{{ search_form.cleaned_data.radius|default:'1.0' }}" min="0.1" max="10" step="0.1">
+                        
+                        <input type="hidden" id="latitude" name="latitude" value="{{ search_form.cleaned_data.latitude|default:'' }}">
+                        <input type="hidden" id="longitude" name="longitude" value="{{ search_form.cleaned_data.longitude|default:'' }}">
+                    </div>
+                </div>
+                
+                <div class="col-md-3 mb-3">
+                    <label for="region" class="form-label">Region:</label>
+                    <select id="region" name="region" class="form-select">
+                        <option value="">All Regions</option>
+                        {% for region in search_form.fields.region.queryset %}
+                        <option value="{{ region.id }}" {% if search_form.cleaned_data.region.id == region.id %}selected{% endif %}>
+                            {{ region.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-3 mb-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search"></i> Search
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-5">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">Search Results</h5>
+            </div>
+            <div class="card-body">
+                {% if properties %}
+                <p>Found {{ properties.paginator.count }} properties</p>
+                
+                <div class="list-group">
+                    {% for property in properties %}
+                    <a href="{% url 'property_detail' property.id %}" class="list-group-item list-group-item-action property-item" data-property-id="{{ property.id }}">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h5 class="mb-1">{{ property.address|default:"No Address" }}</h5>
+                            {% if property.predicted_quality_score %}
+                            <span class="badge rounded-pill" style="background-color: {% quality_color property.predicted_quality_score %}">
+                                {{ property.predicted_quality_score|floatformat:0 }}
+                            </span>
+                            {% endif %}
+                        </div>
+                        <p class="mb-1">
+                            <strong>Lot #:</strong> {{ property.lot_number }}
+                            {% if property.property_type %}
+                            | <strong>Type:</strong> {{ property.property_type }}
+                            {% endif %}
+                        </p>
+                        {% if property.city %}
+                        <small>{{ property.city }}</small>
+                        {% endif %}
+                    </a>
+                    {% endfor %}
+                </div>
+                
+                <!-- Pagination -->
+                {% if properties.has_other_pages %}
+                <nav aria-label="Search results pages" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        {% if properties.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page=1">
+                                First
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ properties.previous_page_number }}">
+                                Previous
+                            </a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled">
+                            <a class="page-link" href="#" tabindex="-1">First</a>
+                        </li>
+                        <li class="page-item disabled">
+                            <a class="page-link" href="#" tabindex="-1">Previous</a>
+                        </li>
+                        {% endif %}
+                        
+                        {% for i in properties.paginator.page_range %}
+                            {% if properties.number == i %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ i }}</span>
+                            </li>
+                            {% elif i > properties.number|add:'-3' and i < properties.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ i }}">
+                                    {{ i }}
+                                </a>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if properties.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ properties.next_page_number }}">
+                                Next
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ properties.paginator.num_pages }}">
+                                Last
+                            </a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled">
+                            <a class="page-link" href="#" tabindex="-1">Next</a>
+                        </li>
+                        <li class="page-item disabled">
+                            <a class="page-link" href="#" tabindex="-1">Last</a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+                
+                {% else %}
+                <div class="no-results">
+                    <svg width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search mb-3 text-muted">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <h4>No Properties Found</h4>
+                    <p class="text-muted">Try adjusting your search criteria or try a different search method.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-7">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">Map View</h5>
+            </div>
+            <div class="card-body">
+                <div id="results-map"></div>
+                
+                {% if search_form.cleaned_data.search_type == 'radius' and search_form.cleaned_data.latitude and search_form.cleaned_data.longitude %}
+                <div class="alert alert-info mt-3">
+                    <i class="fas fa-info-circle"></i> Showing properties within {{ search_form.cleaned_data.radius }} km of the selected point.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if properties %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">Data Visualization</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <canvas id="propertyTypeChart"></canvas>
+                    </div>
+                    <div class="col-md-6">
+                        <canvas id="qualityScoreChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/search.js"></script>
+
+<script>
+    // Initialize map
+    document.addEventListener('DOMContentLoaded', function() {
+        var resultsMap = L.map('results-map');
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(resultsMap);
+        
+        // Add markers for properties
+        var markers = [];
+        var bounds = L.latLngBounds();
+        
+        {% for property in properties %}
+            {% if property.location %}
+            var marker = L.marker([{{ property.location.y }}, {{ property.location.x }}])
+                .addTo(resultsMap);
+                
+            marker.bindPopup(
+                "<strong>{{ property.address|default:property.lot_number }}</strong><br>" +
+                "Lot #: {{ property.lot_number }}<br>" +
+                {% if property.property_type %}
+                "Type: {{ property.property_type }}<br>" +
+                {% endif %}
+                "<a href='{% url 'property_detail' property.id %}'>View Details</a>"
+            );
+            
+            markers.push(marker);
+            bounds.extend([{{ property.location.y }}, {{ property.location.x }}]);
+            {% endif %}
+        {% endfor %}
+        
+        // Add radius circle if radius search
+        {% if search_form.cleaned_data.search_type == 'radius' and search_form.cleaned_data.latitude and search_form.cleaned_data.longitude %}
+        var center = [{{ search_form.cleaned_data.latitude }}, {{ search_form.cleaned_data.longitude }}];
+        var radius = {{ search_form.cleaned_data.radius }} * 1000; // Convert km to meters
+        
+        L.circle(center, {
+            radius: radius,
+            fillColor: '#3388ff',
+            fillOpacity: 0.1,
+            stroke: true,
+            color: '#3388ff',
+            weight: 2
+        }).addTo(resultsMap);
+        
+        bounds.extend(center);
+        {% endif %}
+        
+        // Fit map to bounds if we have markers
+        if (markers.length > 0) {
+            resultsMap.fitBounds(bounds, {
+                padding: [50, 50]
+            });
+        } else {
+            // Default view if no markers
+            {% if search_form.cleaned_data.region %}
+            // Center on selected region
+            resultsMap.setView(
+                [{{ search_form.cleaned_data.region.center_latitude }}, {{ search_form.cleaned_data.region.center_longitude }}],
+                {{ search_form.cleaned_data.region.default_zoom }}
+            );
+            {% else %}
+            // Default view
+            resultsMap.setView([45.0, -73.0], 10);
+            {% endif %}
+        }
+        
+        // Highlight property on list hover
+        const propertyItems = document.querySelectorAll('.property-item');
+        propertyItems.forEach(item => {
+            item.addEventListener('mouseenter', function() {
+                const propertyId = this.getAttribute('data-property-id');
+                markers.forEach(marker => {
+                    if (marker.options.propertyId === propertyId) {
+                        marker.openPopup();
+                    }
+                });
+            });
+        });
+        
+        // Initialize search form behavior
+        initSearchFormBehavior();
+        
+        {% if properties %}
+        // Initialize charts
+        initDataVisualization();
+        {% endif %}
+    });
+    
+    function initSearchFormBehavior() {
+        // Toggle search fields based on search type
+        const searchTypeRadios = document.querySelectorAll('input[name="search_type"]');
+        const lotFields = document.getElementById('lot-search-fields');
+        const addressFields = document.getElementById('address-search-fields');
+        const radiusFields = document.getElementById('radius-search-fields');
+        
+        searchTypeRadios.forEach(radio => {
+            radio.addEventListener('change', function() {
+                lotFields.style.display = this.value === 'lot' ? 'block' : 'none';
+                addressFields.style.display = this.value === 'address' ? 'block' : 'none';
+                radiusFields.style.display = this.value === 'radius' ? 'block' : 'none';
+            });
+        });
+    }
+    
+    {% if properties %}
+    function initDataVisualization() {
+        // Property Type Chart
+        var propertyTypes = {};
+        {% for property in properties %}
+            {% if property.property_type %}
+            if (!propertyTypes["{{ property.property_type }}"]) {
+                propertyTypes["{{ property.property_type }}"] = 0;
+            }
+            propertyTypes["{{ property.property_type }}"]++;
+            {% endif %}
+        {% endfor %}
+        
+        var typeLabels = Object.keys(propertyTypes);
+        var typeData = Object.values(propertyTypes);
+        
+        var propertyTypeCtx = document.getElementById('propertyTypeChart').getContext('2d');
+        var propertyTypeChart = new Chart(propertyTypeCtx, {
+            type: 'pie',
+            data: {
+                labels: typeLabels,
+                datasets: [{
+                    data: typeData,
+                    backgroundColor: [
+                        '#4e73df',
+                        '#1cc88a',
+                        '#36b9cc',
+                        '#f6c23e',
+                        '#e74a3b',
+                        '#6f42c1'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                    },
+                    title: {
+                        display: true,
+                        text: 'Property Types'
+                    }
+                }
+            }
+        });
+        
+        // Quality Score Chart
+        var qualityScores = {
+            'Excellent': 0,
+            'Good': 0,
+            'Average': 0,
+            'Fair': 0,
+            'Poor': 0,
+            'Unknown': 0
+        };
+        
+        {% for property in properties %}
+            {% if property.predicted_quality_score %}
+                {% if property.predicted_quality_score >= 80 %}
+                qualityScores['Excellent']++;
+                {% elif property.predicted_quality_score >= 60 %}
+                qualityScores['Good']++;
+                {% elif property.predicted_quality_score >= 40 %}
+                qualityScores['Average']++;
+                {% elif property.predicted_quality_score >= 20 %}
+                qualityScores['Fair']++;
+                {% else %}
+                qualityScores['Poor']++;
+                {% endif %}
+            {% else %}
+                qualityScores['Unknown']++;
+            {% endif %}
+        {% endfor %}
+        
+        var qualityLabels = Object.keys(qualityScores);
+        var qualityData = Object.values(qualityScores);
+        
+        var qualityScoreCtx = document.getElementById('qualityScoreChart').getContext('2d');
+        var qualityScoreChart = new Chart(qualityScoreCtx, {
+            type: 'bar',
+            data: {
+                labels: qualityLabels,
+                datasets: [{
+                    label: 'Number of Properties',
+                    data: qualityData,
+                    backgroundColor: [
+                        '#4CAF50',  // Excellent - Green
+                        '#8BC34A',  // Good - Light Green
+                        '#FFC107',  // Average - Amber
+                        '#FF9800',  // Fair - Orange
+                        '#F44336',  // Poor - Red
+                        '#9E9E9E'   // Unknown - Gray
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    title: {
+                        display: true,
+                        text: 'Property Quality Distribution'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    }
+    {% endif %}
+</script>
+{% endblock %}

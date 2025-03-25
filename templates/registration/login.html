@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+
+{% block title %}Login{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-6 offset-md-3">
+            <div class="card mt-5">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0">Login</h3>
+                </div>
+                <div class="card-body">
+                    {% if form.errors %}
+                    <div class="alert alert-danger">
+                        Your username and password didn't match. Please try again.
+                    </div>
+                    {% endif %}
+                    
+                    {% if next %}
+                    <div class="alert alert-info">
+                        {% if user.is_authenticated %}
+                        Your account doesn't have access to this page. To proceed,
+                        please login with an account that has access.
+                        {% else %}
+                        Please login to see this page.
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    
+                    <form method="post" action="{% url 'login' %}">
+                        {% csrf_token %}
+                        <div class="form-group mb-3">
+                            <label for="id_username">Username</label>
+                            <input type="text" name="username" autofocus autocapitalize="none" 
+                                   autocomplete="username" maxlength="150" required id="id_username" 
+                                   class="form-control">
+                        </div>
+                        <div class="form-group mb-3">
+                            <label for="id_password">Password</label>
+                            <input type="password" name="password" autocomplete="current-password" 
+                                   required id="id_password" class="form-control">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Login</button>
+                        <input type="hidden" name="next" value="{{ next }}">
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

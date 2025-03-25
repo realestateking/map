@@ -1,0 +1,194 @@
+{% extends 'base.html' %}
+{% load maps_extras %}
+
+{% block title %}Map Layers{% endblock %}
+
+{% block extra_css %}
+<style>
+    .layer-card {
+        transition: transform 0.3s;
+        height: 100%;
+    }
+    
+    .layer-card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .layer-icon {
+        font-size: 2rem;
+        margin-bottom: 10px;
+    }
+    
+    .card-footer {
+        background-color: rgba(0, 0, 0, 0.03);
+    }
+    
+    .type-icon {
+        font-size: 1.2rem;
+        margin-right: 8px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="mb-4">Map Layers</h1>
+            
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> 
+                Manage your map layers here. You can add custom GeoJSON, KML, Shapefiles, or link to external WMS/Tile services.
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="h4">Available Layers</h2>
+                <div>
+                    <a href="{% url 'onedrive_check' %}" class="btn btn-info me-2">
+                        <i class="fab fa-microsoft"></i> OneDrive Status
+                    </a>
+                    <a href="{% url 'add_map_layer' %}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Add New Layer
+                    </a>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover mb-0">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Type</th>
+                                    <th>Region</th>
+                                    <th>Z-Index</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for layer in layers %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            {% if layer.layer_type == 'geojson' %}
+                                                <i class="fas fa-map type-icon text-success"></i>
+                                            {% elif layer.layer_type == 'kml' %}
+                                                <i class="fas fa-globe type-icon text-warning"></i>
+                                            {% elif layer.layer_type == 'shapefile' %}
+                                                <i class="fas fa-draw-polygon type-icon text-info"></i>
+                                            {% elif layer.layer_type == 'wms' %}
+                                                <i class="fas fa-server type-icon text-primary"></i>
+                                            {% elif layer.layer_type == 'tile' %}
+                                                <i class="fas fa-th type-icon text-secondary"></i>
+                                            {% endif %}
+                                            <span>{{ layer.name }}</span>
+                                        </div>
+                                    </td>
+                                    <td>{{ layer.get_layer_type_display }}</td>
+                                    <td>{{ layer.region.name|default:"All Regions" }}</td>
+                                    <td>{{ layer.z_index }}</td>
+                                    <td>
+                                        {% if layer.is_active %}
+                                            <span class="badge bg-success">Active</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Inactive</span>
+                                        {% endif %}
+                                        
+                                        {% if layer.is_base_layer %}
+                                            <span class="badge bg-info">Base Layer</span>
+                                        {% else %}
+                                            <span class="badge bg-light text-dark">Overlay</span>
+                                        {% endif %}
+                                        
+                                        {% if layer.is_visible_by_default %}
+                                            <span class="badge bg-warning">Visible by Default</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group">
+                                            <a href="{% url 'edit_map_layer' layer.id %}" class="btn btn-sm btn-warning">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <a href="{% url 'delete_map_layer' layer.id %}" class="btn btn-sm btn-danger">
+                                                <i class="fas fa-trash"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center p-4">
+                                        <p class="mb-2">No map layers available yet.</p>
+                                        <a href="{% url 'add_map_layer' %}" class="btn btn-primary">
+                                            <i class="fas fa-plus"></i> Add Your First Layer
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="h5 mb-0">Layer Types Guide</h3>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex align-items-center">
+                            <i class="fas fa-map fa-fw text-success me-3"></i>
+                            <div>
+                                <h5 class="mb-1">GeoJSON</h5>
+                                <p class="mb-0 text-muted small">JSON-based format for encoding geographic data structures.</p>
+                            </div>
+                        </li>
+                        <li class="list-group-item d-flex align-items-center">
+                            <i class="fas fa-globe fa-fw text-warning me-3"></i>
+                            <div>
+                                <h5 class="mb-1">KML</h5>
+                                <p class="mb-0 text-muted small">Keyhole Markup Language, XML notation for geographic features.</p>
+                            </div>
+                        </li>
+                        <li class="list-group-item d-flex align-items-center">
+                            <i class="fas fa-draw-polygon fa-fw text-info me-3"></i>
+                            <div>
+                                <h5 class="mb-1">Shapefile</h5>
+                                <p class="mb-0 text-muted small">Popular geospatial vector data format for GIS software.</p>
+                            </div>
+                        </li>
+                        <li class="list-group-item d-flex align-items-center">
+                            <i class="fas fa-server fa-fw text-primary me-3"></i>
+                            <div>
+                                <h5 class="mb-1">WMS Service</h5>
+                                <p class="mb-0 text-muted small">Web Map Service standard protocol for serving map images over the internet.</p>
+                            </div>
+                        </li>
+                        <li class="list-group-item d-flex align-items-center">
+                            <i class="fas fa-th fa-fw text-secondary me-3"></i>
+                            <div>
+                                <h5 class="mb-1">Tile Layer</h5>
+                                <p class="mb-0 text-muted small">Pre-rendered map images divided into a grid of tiles for efficient display.</p>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-footer">
+                    <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-secondary w-100">
+                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

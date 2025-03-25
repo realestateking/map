@@ -1,0 +1,245 @@
+{% extends 'base.html' %}
+{% load maps_extras %}
+
+{% block title %}Upload Property Data{% endblock %}
+
+{% block extra_css %}
+<style>
+    .upload-container {
+        background-color: #f8f9fa;
+        padding: 30px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .upload-icon {
+        font-size: 48px;
+        color: #4e73df;
+        margin-bottom: 20px;
+    }
+    
+    .file-instructions {
+        background-color: #e9ecef;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    
+    .format-example {
+        background-color: #f5f5f5;
+        padding: 15px;
+        border-radius: 8px;
+        font-family: monospace;
+        margin-top: 15px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'index' %}">Home</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}">Admin Dashboard</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Upload Data</li>
+            </ol>
+        </nav>
+        
+        <h1 class="mb-4">Upload Property Data</h1>
+        
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i> Upload Excel or KML files to import property data. Excel files should contain property details, while KML files should include geographic information.
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="upload-container">
+            <div class="text-center">
+                <i class="fas fa-upload upload-icon"></i>
+                <h2>Upload File</h2>
+            </div>
+            
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                
+                <div class="mb-3">
+                    <label for="{{ form.file_type.id_for_label }}" class="form-label">File Type:</label>
+                    {{ form.file_type }}
+                    {% if form.file_type.errors %}
+                    <div class="text-danger">
+                        {{ form.file_type.errors }}
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="mb-3">
+                    <label for="{{ form.title.id_for_label }}" class="form-label">Title:</label>
+                    {{ form.title }}
+                    {% if form.title.errors %}
+                    <div class="text-danger">
+                        {{ form.title.errors }}
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="mb-3">
+                    <label for="{{ form.description.id_for_label }}" class="form-label">Description:</label>
+                    {{ form.description }}
+                    {% if form.description.errors %}
+                    <div class="text-danger">
+                        {{ form.description.errors }}
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="mb-3">
+                    <label for="{{ form.region.id_for_label }}" class="form-label">Region:</label>
+                    {{ form.region }}
+                    {% if form.region.errors %}
+                    <div class="text-danger">
+                        {{ form.region.errors }}
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="mb-3">
+                    <label for="{{ form.file.id_for_label }}" class="form-label">File (Max 10MB):</label>
+                    {{ form.file }}
+                    {% if form.file.errors %}
+                    <div class="text-danger">
+                        {{ form.file.errors }}
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-upload"></i> Upload File
+                </button>
+            </form>
+        </div>
+    </div>
+    
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">File Format Instructions</h5>
+            </div>
+            <div class="card-body">
+                <ul class="nav nav-tabs" id="formatTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="excel-tab" data-bs-toggle="tab" data-bs-target="#excel" type="button" role="tab" aria-controls="excel" aria-selected="true">Excel Files</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="kml-tab" data-bs-toggle="tab" data-bs-target="#kml" type="button" role="tab" aria-controls="kml" aria-selected="false">KML Files</button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content mt-3" id="formatTabsContent">
+                    <div class="tab-pane fade show active" id="excel" role="tabpanel" aria-labelledby="excel-tab">
+                        <div class="file-instructions">
+                            <h5>Excel File Requirements:</h5>
+                            <p>Excel files should contain property data with the following columns:</p>
+                            <ul>
+                                <li><strong>lot_number</strong> (Required): Unique identifier for the property</li>
+                                <li><strong>matricule_number</strong>: Alternative identifier</li>
+                                <li><strong>address</strong>: Property street address</li>
+                                <li><strong>city</strong>: City name</li>
+                                <li><strong>postal_code</strong>: Postal or ZIP code</li>
+                                <li><strong>property_type</strong>: Type of property (e.g., Residential, Commercial)</li>
+                                <li><strong>land_area</strong>: Area of the land in square meters</li>
+                                <li><strong>building_area</strong>: Area of the building in square meters</li>
+                                <li><strong>year_built</strong>: Year the building was constructed</li>
+                                <li><strong>latitude</strong>: Geographic latitude (decimal degrees)</li>
+                                <li><strong>longitude</strong>: Geographic longitude (decimal degrees)</li>
+                            </ul>
+                            <p>Additional columns will be imported as custom attributes.</p>
+                            
+                            <div class="format-example">
+                                lot_number,matricule_number,address,city,property_type,latitude,longitude<br>
+                                LOT-001,MAT-001,"123 Main St","Example City",Residential,45.123,-73.456<br>
+                                LOT-002,MAT-002,"456 Oak Ave","Example City",Commercial,45.124,-73.457
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="tab-pane fade" id="kml" role="tabpanel" aria-labelledby="kml-tab">
+                        <div class="file-instructions">
+                            <h5>KML File Requirements:</h5>
+                            <p>KML files should contain spatial data for properties with the following:</p>
+                            <ul>
+                                <li>Each Placemark should have a <strong>name</strong> that matches a property's lot_number</li>
+                                <li>Placemarks can include Point coordinates for the property location</li>
+                                <li>Placemarks can include Polygon coordinates to define property boundaries</li>
+                                <li>Description fields can include additional property information</li>
+                            </ul>
+                            <p>KML files will be linked to existing property records based on lot numbers.</p>
+                            
+                            <div class="format-example">
+                                &lt;?xml version="1.0" encoding="UTF-8"?&gt;<br>
+                                &lt;kml xmlns="http://www.opengis.net/kml/2.2"&gt;<br>
+                                &nbsp;&nbsp;&lt;Placemark&gt;<br>
+                                &nbsp;&nbsp;&nbsp;&nbsp;&lt;name&gt;LOT-001&lt;/name&gt;<br>
+                                &nbsp;&nbsp;&nbsp;&nbsp;&lt;description&gt;123 Main St&lt;/description&gt;<br>
+                                &nbsp;&nbsp;&nbsp;&nbsp;&lt;Point&gt;<br>
+                                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;coordinates&gt;-73.456,45.123,0&lt;/coordinates&gt;<br>
+                                &nbsp;&nbsp;&nbsp;&nbsp;&lt;/Point&gt;<br>
+                                &nbsp;&nbsp;&lt;/Placemark&gt;<br>
+                                &lt;/kml&gt;
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="alert alert-warning mt-4">
+                    <i class="fas fa-exclamation-triangle"></i> <strong>Important:</strong> Ensure that your Excel and KML files use the same lot numbers to properly link data.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add Bootstrap form classes to form elements
+        const formFields = document.querySelectorAll('input, select, textarea');
+        formFields.forEach(field => {
+            if (field.type !== 'file') {
+                field.classList.add('form-control');
+            } else {
+                field.classList.add('form-control-file');
+            }
+        });
+        
+        // Add select-specific class
+        const selectFields = document.querySelectorAll('select');
+        selectFields.forEach(field => {
+            field.classList.add('form-select');
+        });
+        
+        // Add file input specific styling
+        const fileInputs = document.querySelectorAll('input[type="file"]');
+        fileInputs.forEach(input => {
+            input.classList.add('form-control');
+        });
+        
+        // Handle file type selection to show relevant instructions
+        const fileTypeSelect = document.getElementById('id_file_type');
+        fileTypeSelect.addEventListener('change', function() {
+            const fileType = this.value;
+            
+            if (fileType === 'excel') {
+                document.getElementById('excel-tab').click();
+            } else if (fileType === 'kml') {
+                document.getElementById('kml-tab').click();
+            }
+        });
+    });
+</script>
+{% endblock %}

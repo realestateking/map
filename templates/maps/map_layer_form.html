@@ -1,0 +1,699 @@
+{% extends 'base.html' %}
+{% load maps_extras %}
+
+{% block title %}
+{% if is_add %}Add Map Layer{% else %}Edit Map Layer{% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .layer-type-card {
+        cursor: pointer;
+        transition: all 0.3s;
+        border: 2px solid transparent;
+    }
+    
+    .layer-type-card.selected {
+        border-color: #0d6efd;
+        background-color: #f8f9fa;
+    }
+    
+    .layer-type-card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .layer-type-icon {
+        font-size: 2rem;
+        margin-bottom: 10px;
+    }
+    
+    .field-group {
+        display: none;
+    }
+    
+    .field-group.active {
+        display: block;
+    }
+    
+    #style-editor {
+        height: 150px;
+        font-family: monospace;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="mb-4">
+                {% if is_add %}
+                Add New Map Layer
+                {% else %}
+                Edit Map Layer: {{ layer.name }}
+                {% endif %}
+            </h1>
+            
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> 
+                {% if is_add %}
+                Create a new map layer to display on your property maps.
+                {% else %}
+                Update the properties and settings for this map layer.
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <form method="post" enctype="multipart/form-data" id="mapLayerForm">
+                        {% csrf_token %}
+                        <!-- Hidden z_index field with default value to ensure it's always included -->
+                        <input type="hidden" name="z_index" value="{% if form.z_index.value %}{{ form.z_index.value }}{% else %}0{% endif %}" id="default_z_index">
+                        
+                        {% if form.errors %}
+                        <div class="alert alert-danger">
+                            <h4 class="alert-heading">Please correct the following errors:</h4>
+                            {{ form.errors }}
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Layer Type Selector -->
+                        <div class="mb-4">
+                            <label class="form-label">Layer Type</label>
+                            <div class="row">
+                                <div class="col-md-2 mb-3">
+                                    <div class="card layer-type-card p-3 text-center {% if form.layer_type.value == 'geojson' %}selected{% endif %}" data-layer-type="geojson">
+                                        <i class="fas fa-map layer-type-icon text-success"></i>
+                                        <h5 class="mb-0">GeoJSON</h5>
+                                    </div>
+                                </div>
+                                <div class="col-md-2 mb-3">
+                                    <div class="card layer-type-card p-3 text-center {% if form.layer_type.value == 'kml' %}selected{% endif %}" data-layer-type="kml">
+                                        <i class="fas fa-globe layer-type-icon text-warning"></i>
+                                        <h5 class="mb-0">KML</h5>
+                                    </div>
+                                </div>
+                                <div class="col-md-2 mb-3">
+                                    <div class="card layer-type-card p-3 text-center {% if form.layer_type.value == 'shapefile' %}selected{% endif %}" data-layer-type="shapefile">
+                                        <i class="fas fa-draw-polygon layer-type-icon text-info"></i>
+                                        <h5 class="mb-0">Shapefile</h5>
+                                    </div>
+                                </div>
+                                <div class="col-md-2 mb-3">
+                                    <div class="card layer-type-card p-3 text-center {% if form.layer_type.value == 'wms' %}selected{% endif %}" data-layer-type="wms">
+                                        <i class="fas fa-server layer-type-icon text-primary"></i>
+                                        <h5 class="mb-0">WMS</h5>
+                                    </div>
+                                </div>
+                                <div class="col-md-2 mb-3">
+                                    <div class="card layer-type-card p-3 text-center {% if form.layer_type.value == 'tile' %}selected{% endif %}" data-layer-type="tile">
+                                        <i class="fas fa-th layer-type-icon text-secondary"></i>
+                                        <h5 class="mb-0">Tile</h5>
+                                    </div>
+                                </div>
+                            </div>
+                            {{ form.layer_type.as_hidden }}
+                        </div>
+                        
+                        <!-- Basic Details -->
+                        <div class="mb-4">
+                            <h4 class="h5 mb-3">Basic Details</h4>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="{{ form.name.id_for_label }}" class="form-label">Name *</label>
+                                    {{ form.name|add_class:"form-control" }}
+                                    <div class="form-text">
+                                        A descriptive name for this layer
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="{{ form.region.id_for_label }}" class="form-label">Region</label>
+                                    {{ form.region|add_class:"form-control" }}
+                                    <div class="form-text">
+                                        Leave blank to make this layer available for all regions
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="{{ form.description.id_for_label }}" class="form-label">Description</label>
+                                {{ form.description|add_class:"form-control" }}
+                                <div class="form-text">
+                                    Optional description explaining what this layer represents
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- File Source Fields -->
+                        <div class="mb-4 field-group" id="file-fields">
+                            <h4 class="h5 mb-3">Layer Source</h4>
+                            
+                            <!-- Storage Type Selection for Shapefiles -->
+                            <div class="mb-3 layer-specific" data-layer-type="shapefile">
+                                <label class="form-label">Storage Type</label>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="storage_type" id="storage_local" value="local" checked>
+                                            <label class="form-check-label" for="storage_local">
+                                                <i class="fas fa-server"></i> Local Storage (Replit)
+                                            </label>
+                                            <div class="form-text">For smaller files (less than 100MB)</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="storage_type" id="storage_onedrive" value="onedrive">
+                                            <label class="form-check-label" for="storage_onedrive">
+                                                <i class="fab fa-microsoft"></i> OneDrive
+                                            </label>
+                                            <div class="form-text">For larger files (up to 15GB)</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="alert alert-info mt-2">
+                                    <i class="fas fa-info-circle"></i> For larger shapefiles (over 100MB), use OneDrive storage. 
+                                    You'll need to authenticate with Microsoft OneDrive when uploading a file for the first time.
+                                    <div class="mt-2">
+                                        <a href="{% url 'onedrive_check' %}" class="btn btn-sm btn-primary">
+                                            <i class="fas fa-key"></i> Manage Authentication
+                                        </a>
+                                        <a href="{% url 'onedrive_debug' %}" class="btn btn-sm btn-secondary">
+                                            <i class="fas fa-bug"></i> Debug OneDrive
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="{{ form.file.id_for_label }}" class="form-label">
+                                    <span class="layer-specific" data-layer-type="geojson">GeoJSON File</span>
+                                    <span class="layer-specific" data-layer-type="kml">KML File</span>
+                                    <span class="layer-specific" data-layer-type="shapefile">Shapefile File</span>
+                                    {% if layer and layer.file %}
+                                        <small class="text-muted">(Optional - Keep existing file)</small>
+                                    {% else %}
+                                        <small class="text-danger">*</small>
+                                    {% endif %}
+                                </label>
+                                <!-- Custom file input wrapper for better large file handling -->
+                                <div class="custom-file-wrapper">
+                                    {{ form.file|add_class:"form-control custom-file-input" }}
+                                    <div id="upload-progress-container" class="progress mt-2" style="display: none;">
+                                        <div id="upload-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                             role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%">
+                                            0%
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-text">
+                                    <span class="layer-specific" data-layer-type="geojson">Upload a GeoJSON file (.json, .geojson)</span>
+                                    <span class="layer-specific" data-layer-type="kml">Upload a KML file (.kml, .kmz)</span>
+                                    <span class="layer-specific" data-layer-type="shapefile">
+                                        <span id="shapefile-local-text">Upload a ZIP file containing all shapefile components or a .shp file (best for files < 100MB)</span>
+                                        <span id="shapefile-onedrive-text" style="display:none">Select a shapefile or ZIP to upload via OneDrive (for large files up to 15GB)</span>
+                                    </span>
+                                </div>
+                                {% if layer and layer.file %}
+                                <div class="mt-2 alert alert-info">
+                                    <i class="fas fa-file"></i> Current file: {{ layer.file.name|default:"Unknown" }}
+                                    <p class="mb-0 small">Upload a new file to replace it, or leave blank to keep the current one.</p>
+                                </div>
+                                {% endif %}
+                                
+                                {% if layer and layer.storage_type == 'onedrive' %}
+                                <div class="mt-2 alert alert-primary">
+                                    <i class="fab fa-microsoft"></i> <strong>OneDrive File:</strong> {{ layer.onedrive_file_name|default:"Unknown" }}
+                                    <p class="mb-0 small">This file is stored in OneDrive for better performance with large files.</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- URL Source Fields -->
+                        <div class="mb-4 field-group" id="url-fields">
+                            <h4 class="h5 mb-3">Layer Source</h4>
+                            <div class="mb-3">
+                                <label for="{{ form.url.id_for_label }}" class="form-label">
+                                    <span class="layer-specific" data-layer-type="wms">WMS Service URL</span>
+                                    <span class="layer-specific" data-layer-type="tile">Tile Server URL</span>
+                                    <small class="text-danger">*</small>
+                                </label>
+                                {{ form.url|add_class:"form-control" }}
+                                <div class="form-text">
+                                    <span class="layer-specific" data-layer-type="wms">Full URL to the WMS service</span>
+                                    <span class="layer-specific" data-layer-type="tile">
+                                        Tile server URL with {x}, {y}, {z} placeholders. Example: https://tile.openstreetmap.org/{z}/{x}/{y}.png
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Style Options -->
+                        <div class="mb-4">
+                            <h4 class="h5 mb-3">Display Options</h4>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="{{ form.z_index.id_for_label }}" class="form-label">Z-Index</label>
+                                    {% if form.z_index.value is None %}
+                                        <input type="number" name="{{ form.z_index.html_name }}" value="0" id="{{ form.z_index.id_for_label }}" class="form-control">
+                                    {% else %}
+                                        {{ form.z_index|add_class:"form-control" }}
+                                    {% endif %}
+                                    <div class="form-text">
+                                        Controls stacking order (higher values on top)
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="{{ form.style.id_for_label }}" class="form-label">Style (JSON)</label>
+                                    {{ form.style|add_class:"form-control" }}
+                                    <div class="form-text">
+                                        JSON object with style options for this layer
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <div class="form-check">
+                                        {{ form.is_active|add_class:"form-check-input" }}
+                                        <label for="{{ form.is_active.id_for_label }}" class="form-check-label">Active</label>
+                                        <div class="form-text">
+                                            Is this layer available for display?
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <div class="form-check">
+                                        {{ form.is_visible_by_default|add_class:"form-check-input" }}
+                                        <label for="{{ form.is_visible_by_default.id_for_label }}" class="form-check-label">Visible by Default</label>
+                                        <div class="form-text">
+                                            Show this layer by default when the map loads?
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <div class="form-check">
+                                        {{ form.is_base_layer|add_class:"form-check-input" }}
+                                        <label for="{{ form.is_base_layer.id_for_label }}" class="form-check-label">Base Layer</label>
+                                        <div class="form-text">
+                                            Is this a base map (only one visible at a time)?
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Form Actions -->
+                        <div class="mt-4 d-flex justify-content-between">
+                            <a href="{% url 'map_layer_list' %}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> 
+                                {% if is_add %}Save Layer{% else %}Update Layer{% endif %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="h5 mb-0">Layer Type Information</h3>
+                </div>
+                <div class="card-body">
+                    <div class="type-info" id="geojson-info">
+                        <h4><i class="fas fa-map text-success"></i> GeoJSON</h4>
+                        <p>JSON-based format for encoding geographic data structures.</p>
+                        <ul>
+                            <li>Upload a .json or .geojson file</li>
+                            <li>Supports points, lines, polygons</li>
+                            <li>Properties can be styled with the Style JSON field</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="type-info" id="kml-info">
+                        <h4><i class="fas fa-globe text-warning"></i> KML</h4>
+                        <p>Keyhole Markup Language, XML notation for geographic features.</p>
+                        <ul>
+                            <li>Upload a .kml or .kmz file</li>
+                            <li>Commonly used in Google Earth</li>
+                            <li>Supports complex styling and structure</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="type-info" id="shapefile-info">
+                        <h4><i class="fas fa-draw-polygon text-info"></i> Shapefile</h4>
+                        <p>Popular geospatial vector data format for GIS software.</p>
+                        <ul>
+                            <li>Upload a ZIP containing all shapefile components</li>
+                            <li>Required files: .shp, .shx, .dbf</li>
+                            <li>System will automatically extract and process</li>
+                            <li><strong>Large Files:</strong> For files over 100MB, use OneDrive storage option</li>
+                            <li>OneDrive integration supports files up to 15GB</li>
+                        </ul>
+                        <div class="alert alert-info mt-2">
+                            <i class="fas fa-info-circle"></i> The first time you use OneDrive storage, you'll need to authenticate with your Microsoft account.
+                            <div class="mt-2">
+                                <a href="{% url 'onedrive_check' %}" class="btn btn-sm btn-primary">
+                                    <i class="fas fa-key"></i> Manage Authentication
+                                </a>
+                                <a href="{% url 'onedrive_debug' %}" class="btn btn-sm btn-secondary">
+                                    <i class="fas fa-bug"></i> Debug OneDrive
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="type-info" id="wms-info">
+                        <h4><i class="fas fa-server text-primary"></i> WMS Service</h4>
+                        <p>Web Map Service standard protocol for serving map images.</p>
+                        <ul>
+                            <li>Enter the URL to a WMS service</li>
+                            <li>Often provided by government agencies</li>
+                            <li>Displays as raster image tiles</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="type-info" id="tile-info">
+                        <h4><i class="fas fa-th text-secondary"></i> Tile Layer</h4>
+                        <p>Pre-rendered map tiles for efficient display.</p>
+                        <ul>
+                            <li>Enter URL with {z}, {x}, {y} placeholders</li>
+                            <li>Example: https://tile.openstreetmap.org/{z}/{x}/{y}.png</li>
+                            <li>Fast loading and responsive</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mt-4">
+                <div class="card-header bg-info text-white">
+                    <h3 class="h5 mb-0">Style Options</h3>
+                </div>
+                <div class="card-body">
+                    <p>The Style field accepts a JSON object with styling options for your layer:</p>
+                    
+                    <div class="code-example bg-light p-3 mb-3">
+<pre>{
+  "color": "#ff7800",
+  "weight": 5,
+  "opacity": 0.65
+}</pre>
+                    </div>
+                    
+                    <p>Common style properties:</p>
+                    <ul>
+                        <li><code>color</code>: Line/border color</li>
+                        <li><code>weight</code>: Line thickness</li>
+                        <li><code>opacity</code>: Transparency (0-1)</li>
+                        <li><code>fillColor</code>: Fill color</li>
+                        <li><code>fillOpacity</code>: Fill transparency</li>
+                        <li><code>radius</code>: Size for point features</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Handle layer type selection
+        const cards = document.querySelectorAll('.layer-type-card');
+        const layerTypeInput = document.querySelector('#{{ form.layer_type.id_for_label }}');
+        const fileFields = document.getElementById('file-fields');
+        const urlFields = document.getElementById('url-fields');
+        const typeInfos = document.querySelectorAll('.type-info');
+        const layerSpecifics = document.querySelectorAll('.layer-specific');
+        const mapLayerForm = document.getElementById('mapLayerForm');
+        const zIndexInput = document.getElementById('{{ form.z_index.id_for_label }}');
+        const defaultZIndexInput = document.getElementById('default_z_index');
+        
+        // Storage type option elements
+        const storageLocalRadio = document.getElementById('storage_local');
+        const storageOnedriveRadio = document.getElementById('storage_onedrive');
+        const shapefileLocalText = document.getElementById('shapefile-local-text');
+        const shapefileOnedriveText = document.getElementById('shapefile-onedrive-text');
+        
+        // Handle storage type selection
+        if (storageLocalRadio && storageOnedriveRadio) {
+            storageLocalRadio.addEventListener('change', function() {
+                if (this.checked) {
+                    shapefileLocalText.style.display = 'inline';
+                    shapefileOnedriveText.style.display = 'none';
+                }
+            });
+            
+            storageOnedriveRadio.addEventListener('change', function() {
+                if (this.checked) {
+                    shapefileLocalText.style.display = 'none';
+                    shapefileOnedriveText.style.display = 'inline';
+                }
+            });
+            
+            // Set initial state based on selected storage type
+            if (storageOnedriveRadio.checked) {
+                shapefileLocalText.style.display = 'none';
+                shapefileOnedriveText.style.display = 'inline';
+            } else {
+                shapefileLocalText.style.display = 'inline';
+                shapefileOnedriveText.style.display = 'none';
+            }
+        }
+        
+        // Initial setup based on selected type
+        updateVisibility(layerTypeInput.value);
+        
+        // Make sure z-index is set when the regular z-index input changes
+        if (zIndexInput) {
+            zIndexInput.addEventListener('change', function() {
+                defaultZIndexInput.value = this.value;
+            });
+        }
+        
+        // Initialize file upload progress
+        const fileInput = document.querySelector('input[type="file"]');
+        const progressContainer = document.getElementById('upload-progress-container');
+        const progressBar = document.getElementById('upload-progress-bar');
+        
+        if (fileInput) {
+            fileInput.addEventListener('change', function(e) {
+                if (this.files && this.files.length > 0) {
+                    const file = this.files[0];
+                    // Show file size in human-readable format
+                    let sizeText = '';
+                    if (file.size > 1024 * 1024 * 1024) {
+                        sizeText = (file.size / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+                    } else if (file.size > 1024 * 1024) {
+                        sizeText = (file.size / (1024 * 1024)).toFixed(2) + ' MB';
+                    } else if (file.size > 1024) {
+                        sizeText = (file.size / 1024).toFixed(2) + ' KB';
+                    } else {
+                        sizeText = file.size + ' bytes';
+                    }
+                    
+                    console.log(`File selected: ${file.name}, size: ${sizeText}, type: ${file.type}`);
+                    
+                    // Check for very large files
+                    if (file.size > 500 * 1024 * 1024) { // Over 500MB
+                        const sizeWarning = document.createElement('div');
+                        sizeWarning.className = 'alert alert-warning mt-2';
+                        sizeWarning.innerHTML = `
+                            <strong>Large File Warning:</strong> The selected file is ${sizeText} which may take 
+                            a significant time to upload. Please be patient during the upload process.
+                        `;
+                        
+                        // Add the warning after the file input
+                        const warningContainer = fileInput.parentNode;
+                        // Remove any existing warnings
+                        const existingWarning = warningContainer.querySelector('.alert-warning');
+                        if (existingWarning) {
+                            warningContainer.removeChild(existingWarning);
+                        }
+                        warningContainer.appendChild(sizeWarning);
+                    }
+                }
+            });
+        }
+        
+        // Handle form submission
+        if (mapLayerForm) {
+            mapLayerForm.addEventListener('submit', function(e) {
+                // Prevent default form submission
+                e.preventDefault();
+                
+                // Ensure z_index is set
+                if (!defaultZIndexInput.value) {
+                    defaultZIndexInput.value = '0';
+                }
+                
+                // Create FormData for AJAX submission
+                const formData = new FormData(this);
+                
+                // Debug form data
+                console.log("Form submission data:");
+                for (let [key, value] of formData.entries()) {
+                    console.log(`${key}: ${value}`);
+                }
+                
+                // Special handling for file uploads
+                if (fileInput && fileInput.files && fileInput.files.length > 0) {
+                    const file = fileInput.files[0];
+                    console.log(`File selected: ${file.name}, size: ${file.size}, type: ${file.type}`);
+                    
+                    // Make sure the file is included in the form data
+                    if (!formData.has('file')) {
+                        console.error("File is not being included in FormData!");
+                        return; // Don't proceed if file is missing
+                    }
+                    
+                    // For large files, use AJAX with progress bar
+                    if (file.size > 10 * 1024 * 1024) { // Larger than 10MB
+                        // Show progress bar
+                        progressContainer.style.display = 'block';
+                        progressBar.style.width = '0%';
+                        progressBar.textContent = '0%';
+                        
+                        // Create AJAX request
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('POST', mapLayerForm.action || window.location.href);
+                        
+                        // Add CSRF token
+                        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                        xhr.setRequestHeader('X-CSRFToken', csrfToken);
+                        
+                        // Track upload progress
+                        xhr.upload.addEventListener('progress', function(event) {
+                            if (event.lengthComputable) {
+                                const percentComplete = Math.round((event.loaded / event.total) * 100);
+                                progressBar.style.width = percentComplete + '%';
+                                progressBar.textContent = percentComplete + '%';
+                                progressBar.setAttribute('aria-valuenow', percentComplete);
+                            }
+                        });
+                        
+                        // Handle upload completion
+                        xhr.addEventListener('load', function() {
+                            if (xhr.status >= 200 && xhr.status < 300) {
+                                // Successful upload - redirect to the returned location or reload
+                                if (xhr.getResponseHeader('Location')) {
+                                    window.location.href = xhr.getResponseHeader('Location');
+                                } else {
+                                    // Check if it's the success page by looking for success message
+                                    if (xhr.responseText.includes('success')) {
+                                        window.location.href = "{% url 'map_layer_list' %}";
+                                    } else {
+                                        // Probably validation errors - replace current page content
+                                        document.open();
+                                        document.write(xhr.responseText);
+                                        document.close();
+                                    }
+                                }
+                            } else {
+                                // Error during upload
+                                progressContainer.style.display = 'none';
+                                alert('Error uploading file. Please try again.');
+                                console.error('Upload error:', xhr.statusText);
+                            }
+                        });
+                        
+                        // Handle upload error
+                        xhr.addEventListener('error', function() {
+                            progressContainer.style.display = 'none';
+                            alert('Network error during upload. Please try again.');
+                            console.error('Network error during upload');
+                        });
+                        
+                        // Submit the form data
+                        xhr.send(formData);
+                    } else {
+                        // For smaller files, submit normally
+                        this.submit();
+                    }
+                } else {
+                    // No file selected, just submit the form normally
+                    this.submit();
+                }
+            });
+        }
+        
+        cards.forEach(card => {
+            card.addEventListener('click', function() {
+                // Deselect all cards
+                cards.forEach(c => c.classList.remove('selected'));
+                
+                // Select this card
+                this.classList.add('selected');
+                
+                // Set the value in the hidden field
+                const layerType = this.dataset.layerType;
+                layerTypeInput.value = layerType;
+                
+                // Update visibility of fields
+                updateVisibility(layerType);
+            });
+        });
+        
+        function updateVisibility(layerType) {
+            // Hide all type-specific info sections
+            typeInfos.forEach(info => {
+                info.style.display = 'none';
+            });
+            
+            // Show the selected type info
+            const selectedInfo = document.getElementById(`${layerType}-info`);
+            if (selectedInfo) {
+                selectedInfo.style.display = 'block';
+            }
+            
+            // Hide all layer-specific labels and help text
+            layerSpecifics.forEach(el => {
+                el.style.display = 'none';
+            });
+            
+            // Show only the ones for this layer type
+            document.querySelectorAll(`.layer-specific[data-layer-type="${layerType}"]`).forEach(el => {
+                el.style.display = 'inline';
+            });
+            
+            // File-based layers: GeoJSON, KML, Shapefile
+            if (['geojson', 'kml', 'shapefile'].includes(layerType)) {
+                fileFields.classList.add('active');
+                urlFields.classList.remove('active');
+                
+                // Show/hide storage type options specifically for shapefiles
+                const storageTypeSection = document.querySelector('.layer-specific[data-layer-type="shapefile"]');
+                if (storageTypeSection) {
+                    if (layerType === 'shapefile') {
+                        storageTypeSection.style.display = 'block';
+                        
+                        // Update storage type visibility based on selected option
+                        if (storageLocalRadio && storageOnedriveRadio) {
+                            if (storageOnedriveRadio.checked) {
+                                shapefileLocalText.style.display = 'none';
+                                shapefileOnedriveText.style.display = 'inline';
+                            } else {
+                                shapefileLocalText.style.display = 'inline';
+                                shapefileOnedriveText.style.display = 'none';
+                            }
+                        }
+                    }
+                }
+            } 
+            // URL-based layers: WMS, Tile
+            else if (['wms', 'tile'].includes(layerType)) {
+                fileFields.classList.remove('active');
+                urlFields.classList.add('active');
+            }
+        }
+    });
+</script>
+{% endblock %}

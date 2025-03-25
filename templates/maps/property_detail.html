@@ -1,0 +1,359 @@
+{% extends 'base.html' %}
+{% load maps_extras %}
+
+{% block title %}Property Details: {{ property.lot_number }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    #property-map {
+        height: 300px;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .property-card {
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+    }
+    
+    .property-header {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-bottom: 1px solid #e3e3e3;
+        border-radius: 8px 8px 0 0;
+    }
+    
+    .info-label {
+        font-weight: bold;
+        color: #495057;
+    }
+    
+    .quality-score {
+        display: inline-block;
+        padding: 5px 10px;
+        border-radius: 15px;
+        color: white;
+        font-weight: bold;
+    }
+    
+    .data-chart {
+        margin-top: 20px;
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'index' %}">Home</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Property Details</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="property-card">
+            <div class="property-header">
+                <h1>{{ property.address|default:"Property" }}</h1>
+                <h5 class="text-muted">Lot Number: {{ property.lot_number }}</h5>
+                {% if property.matricule_number %}
+                <h6 class="text-muted">Matricule: {{ property.matricule_number }}</h6>
+                {% endif %}
+            </div>
+            
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h4>Property Information</h4>
+                        <table class="table table-striped">
+                            <tbody>
+                                <tr>
+                                    <td class="info-label">Property Type</td>
+                                    <td>{{ property.property_type|default:"Not specified" }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="info-label">City</td>
+                                    <td>{{ property.city|default:"Not specified" }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="info-label">Postal Code</td>
+                                    <td>{{ property.postal_code|default:"Not specified" }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="info-label">Land Area</td>
+                                    <td>{{ property.land_area|default:"Not specified" }} m²</td>
+                                </tr>
+                                <tr>
+                                    <td class="info-label">Building Area</td>
+                                    <td>{{ property.building_area|default:"Not specified" }} m²</td>
+                                </tr>
+                                <tr>
+                                    <td class="info-label">Year Built</td>
+                                    <td>{{ property.year_built|default:"Not specified" }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h4>Financial Information</h4>
+                        <table class="table table-striped">
+                            <tbody>
+                                <tr>
+                                    <td class="info-label">Owner</td>
+                                    <td>{{ property.owner|default:"Not specified" }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="info-label">Assessed Value</td>
+                                    <td>
+                                        {% if property.assessed_value %}
+                                        ${{ property.assessed_value|floatformat:2 }}
+                                        {% else %}
+                                        Not specified
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="info-label">Last Sale Date</td>
+                                    <td>
+                                        {% if property.last_sale_date %}
+                                        {{ property.last_sale_date }}
+                                        {% else %}
+                                        Not specified
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="info-label">Last Sale Price</td>
+                                    <td>
+                                        {% if property.last_sale_price %}
+                                        ${{ property.last_sale_price|floatformat:2 }}
+                                        {% else %}
+                                        Not specified
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <h4 class="mt-4">AI Predictions</h4>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h5 class="card-title">Building Height</h5>
+                                <p class="card-text">
+                                    {% if property.predicted_height %}
+                                    <span class="fs-3">{{ property.predicted_height|floatformat:1 }} meters</span>
+                                    {% else %}
+                                    <span class="text-muted">No prediction available</span>
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h5 class="card-title">Building Quality</h5>
+                                <p class="card-text">
+                                    {% if property.predicted_quality_score %}
+                                    <span class="quality-score" style="background-color: {% quality_color property.predicted_quality_score %}">
+                                        {{ property.predicted_quality_score|floatformat:0 }}/100
+                                    </span>
+                                    <span class="ms-2">{% quality_label property.predicted_quality_score %}</span>
+                                    {% else %}
+                                    <span class="text-muted">No prediction available</span>
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                {% if user.is_authenticated and not property.predicted_height or not property.predicted_quality_score %}
+                <form action="{% url 'process_ml' property.id %}" method="post" class="mt-3">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-brain"></i> Generate AI Predictions
+                    </button>
+                </form>
+                {% endif %}
+                
+                {% if attributes %}
+                <h4 class="mt-4">Additional Attributes</h4>
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Attribute</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for attr in attributes %}
+                        <tr>
+                            <td class="info-label">{{ attr.name }}</td>
+                            <td>{{ attr.value }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% endif %}
+                
+                {% if property.building_area and property.land_area %}
+                <div class="data-chart">
+                    <h4>Property Area Comparison</h4>
+                    <canvas id="areaChart"></canvas>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="property-card">
+            <div class="property-header">
+                <h4>Location</h4>
+            </div>
+            <div class="card-body">
+                <div id="property-map" class="mb-3"></div>
+                
+                {% if property.latitude and property.longitude %}
+                <p>
+                    <i class="fas fa-map-marker-alt me-2"></i>
+                    Coordinates: {{ property.latitude|floatformat:6 }}, {{ property.longitude|floatformat:6 }}
+                </p>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    No location data available for this property.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        {% if neighbors %}
+        <div class="property-card mt-4">
+            <div class="property-header">
+                <h4>Nearby Properties</h4>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    {% for neighbor in neighbors %}
+                    <a href="{% url 'property_detail' neighbor.id %}" class="list-group-item list-group-item-action">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h5 class="mb-1">{{ neighbor.address|default:neighbor.lot_number }}</h5>
+                        </div>
+                        {% if neighbor.property_type %}
+                        <p class="mb-1">{{ neighbor.property_type }}</p>
+                        {% endif %}
+                        <small>Lot #: {{ neighbor.lot_number }}</small>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/property_detail.js"></script>
+
+<script>
+    // Initialize property map
+    document.addEventListener('DOMContentLoaded', function() {
+        {% if property.latitude and property.longitude %}
+        var propertyLocation = [{{ property.latitude }}, {{ property.longitude }}];
+        var propertyMap = L.map('property-map').setView(propertyLocation, 16);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(propertyMap);
+        
+        // Add marker for the property
+        var marker = L.marker(propertyLocation).addTo(propertyMap);
+        marker.bindPopup("<b>{{ property.address|default:property.lot_number }}</b><br>Lot #: {{ property.lot_number }}").openPopup();
+        
+        {% if property.boundary_coordinates %}
+        // Add polygon if available
+        try {
+            var boundaryCoords = JSON.parse('{{ property.boundary_coordinates|escapejs }}');
+            var polygon = L.polygon(boundaryCoords, {
+                color: '#3388ff',
+                fillOpacity: 0.3
+            }).addTo(propertyMap);
+        } catch(e) {
+            console.error("Error parsing boundary coordinates:", e);
+        }
+        {% endif %}
+        
+        {% else %}
+        // If no location data, show the region instead
+        var regionCenter = [{{ property.region.center_latitude }}, {{ property.region.center_longitude }}];
+        var propertyMap = L.map('property-map').setView(regionCenter, {{ property.region.default_zoom }});
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(propertyMap);
+        
+        propertyMap.setZoom(10);
+        {% endif %}
+    });
+    
+    {% if property.building_area and property.land_area %}
+    // Create area comparison chart
+    document.addEventListener('DOMContentLoaded', function() {
+        var ctx = document.getElementById('areaChart').getContext('2d');
+        var areaChart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: ['Building Area', 'Remaining Land Area'],
+                datasets: [{
+                    data: [
+                        {{ property.building_area }}, 
+                        {{ property.land_area }} - {{ property.building_area }}
+                    ],
+                    backgroundColor: [
+                        '#4e73df',
+                        '#36b9cc'
+                    ],
+                    hoverBackgroundColor: [
+                        '#2e59d9',
+                        '#2c9faf'
+                    ],
+                    hoverBorderColor: "rgba(234, 236, 244, 1)",
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                var label = context.label || '';
+                                var value = context.parsed || 0;
+                                return label + ': ' + value + ' m²';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    });
+    {% endif %}
+</script>
+{% endblock %}
