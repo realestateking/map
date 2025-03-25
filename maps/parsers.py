@@ -6,8 +6,10 @@ import tempfile
 import shutil
 from io import BytesIO
 import re
+import json
 
-from django.contrib.gis.geos import Point, Polygon
+# Use regular Django instead of GeoDjango
+# We'll implement manual geometric handling instead of using django.contrib.gis
 
 import logging
 logger = logging.getLogger(__name__)
