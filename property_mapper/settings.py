@@ -56,7 +56,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     # 'django.contrib.gis',  # Temporarily disabled (GeoDjango)
-    'leaflet',  # For interactive maps
+    # 'leaflet',  # Temporarily disabled (requires GeoDjango)
     'maps.apps.MapsConfig',  # Our main application
 ]
 

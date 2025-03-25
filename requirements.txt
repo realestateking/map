@@ -8,3 +8,12 @@ tensorflow
 django-leaflet
 openpyxl
 pyshp
+django
+pandas
+psycopg2-binary
+django
+pandas
+pillow
+psycopg2-binary
+python-dotenv
+requests
