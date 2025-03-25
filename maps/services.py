@@ -3,13 +3,15 @@ import pandas as pd
 import xml.etree.ElementTree as ET
 from zipfile import ZipFile
 from io import BytesIO
+import json
 
-from django.contrib.gis.geos import Point, Polygon
+# Use regular Django instead of GeoDjango
 from django.db import transaction
 from django.utils.text import slugify
 
 from .models import Property, PropertyAttribute, PropertyDataFile, Region
 from .parsers import parse_kml_file, parse_excel_file
+from .geo_utils import Point, Polygon
 
 import logging
 logger = logging.getLogger(__name__)
@@ -68,11 +70,9 @@ def process_excel_file(file_obj):
             # Handle location if lat/lng are provided
             if row.get('latitude') and row.get('longitude'):
                 try:
-                    property_data['location'] = Point(
-                        float(row['longitude']), 
-                        float(row['latitude']),
-                        srid=4326
-                    )
+                    # Store coordinates as simple lat/lng fields
+                    property_data['latitude'] = float(row['latitude'])
+                    property_data['longitude'] = float(row['longitude'])
                 except (ValueError, TypeError):
                     # Skip location if coordinates are invalid
                     pass
@@ -117,17 +117,15 @@ def process_kml_file(file_obj):
                 
                 # Update with geometric data
                 if placemark.get('point'):
-                    property.location = Point(
-                        placemark['point'][0], 
-                        placemark['point'][1],
-                        srid=4326
-                    )
+                    # Store coordinates as simple lat/lng fields
+                    property.longitude = placemark['point'][0]
+                    property.latitude = placemark['point'][1]
                 
                 if placemark.get('polygon'):
-                    # Create polygon from coordinates
+                    # Store polygon as JSON string in boundary_coordinates
                     coords = placemark['polygon']
                     if coords and len(coords) >= 4:  # Must have at least 4 points for a valid polygon
-                        property.polygon = Polygon(coords, srid=4326)
+                        property.boundary_coordinates = json.dumps(coords)
                 
                 # Save description as an attribute if present
                 if placemark.get('description'):
