@@ -1,0 +1,106 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+
+# Large data files
+media/property_files/
+media/map_layers/
+media/shapefiles/
+*.shp
+*.shx
+*.dbf
+*.prj
+*.sbn
+*.sbx
+*.fbn
+*.fbx
+*.ain
+*.aih
+*.atx
+*.ixs
+*.mxs
+*.cpg
+*.xml
+*.lock
+*.json.gz
+
+# GeoServer
+geoserver/
+*.war
+*.jar
+
+# File uploads
+*.csv
+*.xlsx
+*.xls
+*.zip
+*.kmz
+*.kml
+*.gpkg
+*.geojson
+*.gml
+*.json
+!package.json
+!package-lock.json
+
+# Cache directories
+.cache/
+__pycache__/
+*/__pycache__/
+*/*/__pycache__/
+*/*/*/__pycache__/
+*/*/*/*/__pycache__/
+
+# Virtual Environment
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python libraries
+.pythonlibs/
+
+# Temporary files
+tmp*/
+tmp*.*
+
+# Replit specific
+.replit
+
+# Large file patterns (size-based filters to be applied with git)
+# For existing large files in the repository, we'll need to use git-filter-repo
